@@ -7,6 +7,7 @@ var configModule = require('config')
 config = configModule.util.loadFileConfigs(__dirname + '/config/')
 const fetch = require('./lib/fetch')
 const merger=require('./lib/merger')
+const fs = require('fs');
 
 const program = require('commander')
 program.version('1.0.0')
@@ -25,7 +26,8 @@ update().catch(err => {
 })
 
 //get swagger json
-function getSwaggerJson(url) {
+function getSwaggerJsonHttp(url) {
+    console.log("downloading swagger json from: ", url);
     return fetch({
         url: url,
         methods: 'get'
@@ -37,10 +39,40 @@ function getSwaggerJson(url) {
     })
 }
 
+// get swagger json from file
+function getSwaggerJson(path) {
+    console.log("reading swagger json from file: ", path);
+    return new Promise((resolve, reject) => {
+        fs.readFile(path, 'utf8', (err, data) => {
+            if (err) {
+                reject(err)
+            }
+            resolve(JSON.parse(data))
+        })
+    }).catch(err => {
+        console.log('get swagger json failed: ' + err.message)
+        process.exit(-1);
+    })
+}
 
+async function backup(collectionName, collectionData) {
+    const fileName = `${new Date().getTime()}.json`;
+    const backupDir = `./backup/${collectionName}/`;
+    console.log("backup collection to file: ", backupDir + fileName);
+
+    if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+    }
+    fs.writeFileSync(backupDir + fileName, JSON.stringify(collectionData, null, 2));
+}
 
 async function update() {
-    var swaggerJson = await getSwaggerJson(url)
+
+    if (url.match(/^https?:\/\//)) {
+        var swaggerJson = await getSwaggerJsonHttp(url)
+    } else {
+        var swaggerJson = await getSwaggerJson(url)
+    }
     //add postman collection used info
     swaggerJson['info'] = {
         'title': collectionName,
@@ -80,6 +112,7 @@ async function update() {
         }
     
         var savedCollection = await collection.getCollectionDetail(id)   
+        await backup(collectionName, savedCollection)
         var mergedCollection=merger.merge(savedCollection,collectionJson)    
         collection.updateCollection(id, mergedCollection)
     })
