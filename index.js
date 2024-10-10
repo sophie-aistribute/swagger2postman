@@ -13,12 +13,14 @@ const program = require('commander')
 program.version('1.0.0')
     .option('-s --service <service>', 'which service to convert')
     .option('-r --replace [repliaces]', 'comma split api name which will replace not merge')
+    .option('-O, --overwrite', 'replace the collection instead of merge')
     .parse(process.argv)
 
 
 var serviceConfig = config[program.service]
 var url = serviceConfig.url
 var collectionName = serviceConfig.collection_name
+var overwrite = program.overwrite || false
 
 //run update
 update().catch(err => {
@@ -56,7 +58,8 @@ function getSwaggerJson(path) {
 }
 
 async function backup(collectionName, collectionData) {
-    const fileName = `${new Date().getTime()}.json`;
+    const date = new Date()
+    const fileName = `${date.getFullYear()}${date.getMonth() + 1}${date.getDate()}${date.getHours()}${date.getMinutes()}${date.getSeconds()}.json`;
     const backupDir = `./backup/${collectionName}/`;
     console.log("backup collection to file: ", backupDir + fileName);
 
@@ -113,7 +116,12 @@ async function update() {
     
         var savedCollection = await collection.getCollectionDetail(id)   
         await backup(collectionName, savedCollection)
-        var mergedCollection=merger.merge(savedCollection,collectionJson)    
-        collection.updateCollection(id, mergedCollection)
+
+        if (overwrite) {
+            collection.updateCollection(id, collectionJson)
+        } else {
+            var mergedCollection=merger.merge(savedCollection,collectionJson)    
+            collection.updateCollection(id, mergedCollection)
+        }
     })
 }
